@@ -1,6 +1,9 @@
 🚀 Yeni projem: Fitness Tracker App
+
 React Native ile geliştirdiğim bu mobil uygulama, kullanıcıların günlük aktivitelerini takip etmesini, hedefler koymasını ve ilerlemesini analiz etmesini sağlıyor.
+
 📱 Uygulama Özellikleri:
+
  🔹 Firebase Authentication ile kullanıcı kayıt & giriş sistemi
  🔹 Profil düzenleme sayfası (yaş, kilo, boy vb. bilgiler)
  🔹 Günlük adım, kalori ve mesafe takibi
