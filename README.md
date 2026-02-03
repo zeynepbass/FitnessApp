@@ -1,4 +1,4 @@
-🚀 Yeni projem: Fitness Tracker App
+🚀 Fitness Tracker App
 
 React Native ile geliştirdiğim bu mobil uygulama, kullanıcıların günlük aktivitelerini takip etmesini, hedefler koymasını ve ilerlemesini analiz etmesini sağlıyor.
 
