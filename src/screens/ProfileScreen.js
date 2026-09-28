@@ -1,12 +1,5 @@
-import React from 'react'
+import Profile from "../components/Profile";
 
-import Profile from "../components/Profile"
-const ProfileScreen = () => {
-  return (
+const ProfileScreen = () => <Profile />;
 
-<Profile/>
-
-  )
-}
-
-export default ProfileScreen
+export default ProfileScreen;

@@ -1,245 +1,210 @@
-
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  SafeAreaView,
-  Text,
-  View,
-  TouchableOpacity,
+  Alert,
   Image,
-  Dimensions,
-  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import { getUserByEmail } from "../helper/http";
-import { LinearGradient } from "expo-linear-gradient";
-import Modal from "../components/Modal";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { signOut } from "firebase/auth";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import AntDesign from "@expo/vector-icons/AntDesign";
+import Feather from "@expo/vector-icons/Feather";
+import Screen from "./Screen";
+import GoalModal from "./GoalModal";
+import StepsLimit from "./StepsLimit";
 import { auth } from "../../firebase";
-import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-export default function ProfileScreen() {
+import { getUserProfile } from "../helper/http";
+import { clearStoredUser, getStoredUser } from "../helper/session";
+import { colors } from "../theme";
+
+export default function Profile() {
   const navigation = useNavigation();
-  const [screen, setScreen] = useState(Dimensions.get("window"));
+  const { width, height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
-  const [userToken, setUserToken] = useState(null);
-  const [data, setData] = useState(0);
-  useEffect(() => {
-    const checkTokenAndListen = async () => {
-      const token = await AsyncStorage.getItem("userToken");
-      const parsedToken = token ? JSON.parse(token) : null;
-      setUserToken(parsedToken);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-      const subscription = Dimensions.addEventListener(
-        "change",
-        ({ window }) => {
-          setScreen(window);
-        }
-      );
-      const fetchUsers = async () => {
-        const users = await getUserByEmail();
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-        setData(users);
+      const load = async () => {
+        const storedUser = await getStoredUser();
+        const result = await getUserProfile(storedUser?.uid);
+        if (cancelled) return;
+        setUser(storedUser);
+        setProfile(result);
       };
-      fetchUsers();
-      return () => subscription?.remove();
-    };
 
-    checkTokenAndListen();
-  }, []);
+      load().catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
-  const topPadding = screen.height * 0.1;
-  const cardWidth = (screen.width - 80) / 2;
-  const imageSize = Math.min(screen.width, screen.height) * 0.25;
+  const imageSize = Math.min(width, height, 480) * 0.3;
+
   const handleLogout = async () => {
     try {
-      await auth.signOut();
-      await AsyncStorage.removeItem("userToken");
-      navigation.navigate("Login");
+      await signOut(auth);
+      await clearStoredUser();
+      const rootNavigation = navigation.getParent() ?? navigation;
+      rootNavigation.reset({ index: 0, routes: [{ name: "Login" }] });
     } catch (error) {
-      alert(error.message);
+      Alert.alert("Hata", error.message);
     }
   };
+
   const stats = [
-    { label: "Yaş", value: data.age,icon:<MaterialIcons name="emoji-people" size={24} color="white" /> },
-    { label: "Kilo", value: data.weight,icon: <FontAwesome5 name="weight" size={24} color="white" />},
-    { label: "Boy", value: data.height,icon:<AntDesign name="column-height" size={24} color="white" />  },
+    {
+      label: "Yaş",
+      value: profile?.age,
+      icon: <MaterialIcons name="emoji-people" size={20} color={colors.text} />,
+    },
+    {
+      label: "Kilo",
+      value: profile?.weight && `${profile.weight} kg`,
+      icon: <FontAwesome5 name="weight" size={18} color={colors.text} />,
+    },
+    {
+      label: "Boy",
+      value: profile?.height && `${profile.height} cm`,
+      icon: <AntDesign name="column-height" size={20} color={colors.text} />,
+    },
   ];
+
   return (
-    <LinearGradient colors={["rgb(41,47,25)", "black"]} style={{ flex: 1 }}>
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: "gradient", padding: 20 }}
-      >
-        <ScrollView
-          contentContainerStyle={{
-            alignItems: "center",
-            paddingTop: topPadding,
-          }}
-          showsVerticalScrollIndicator={false}
+    <Screen contentContainerStyle={styles.content}>
+      {profile?.image ? (
+        <Image
+          source={{ uri: profile.image }}
+          style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2 }}
+        />
+      ) : (
+        <View
+          style={[
+            styles.avatarPlaceholder,
+            { width: imageSize, height: imageSize, borderRadius: imageSize / 2 },
+          ]}
         >
-          <TouchableOpacity style={{ marginBottom: 10 }}>
-            <Image
-              source={{ uri: data.image }}
-              style={{
-                width: imageSize,
-                height: imageSize,
-                borderRadius: imageSize / 2,
-              }}
-            />
-          </TouchableOpacity>
+          <Feather name="user" size={imageSize * 0.45} color={colors.light} />
+        </View>
+      )}
 
-          <Text style={{ fontSize: 24, color: "white" }}>
-            {userToken?.displayName || "Kullanıcı"}
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "bold",
-              color: "white",
-              margin: 10,
-              textAlign: "center",
-            }}
-          >
-            Fitness Hedefi:{" "}
-            {data?.calories ? `${data.calories}` : "Adım Girilmedi"}
-          </Text>
+      <Text style={styles.name}>{user?.displayName || profile?.displayName || "Kullanıcı"}</Text>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
+      <StepsLimit steps={profile?.steps} calories={profile?.calories} />
 
-              width: "100%",
-              marginBottom: 20,
-            }}
-          >
-            <View
-              style={{
-                backgroundColor: "rgb(49,49,49)",
-                borderRadius: 15,
-                padding: 15,
+      <TouchableOpacity style={styles.editButton} onPress={() => setOpen(true)}>
+        <Text style={styles.editButtonText}>Hedefleri Düzenle</Text>
+      </TouchableOpacity>
 
-                margin: 5,
-                borderRadius: 15,
-                alignItems: "center",
-                width: cardWidth,
-              }}
-            >
-              <Text style={{ color: "white" }}>Adım Hedefi</Text>
-              <Text style={{ fontWeight: "bold", color: "white" }}>
-                {data?.steps}
-              </Text>
+      <View style={styles.stats}>
+        {stats.map((item) => (
+          <View key={item.label} style={styles.card}>
+            <View style={styles.cardHeader}>
+              {item.icon}
+              <Text style={styles.label}>{item.label}</Text>
             </View>
-
-            <View
-              style={{
-                backgroundColor: "rgb(49,49,49)",
-                borderRadius: 15,
-                padding: 15,
-                margin: 5,
-
-                borderRadius: 15,
-                alignItems: "center",
-                width: cardWidth,
-              }}
-            >
-              <Text style={{ color: "white" }}>Kalori Hedefi</Text>
-              <Text style={{ fontWeight: "bold", color: "white" }}>
-                {data?.calories}
-              </Text>
-            </View>
+            <Text style={styles.value}>{item.value || "-"}</Text>
           </View>
-
-          <TouchableOpacity
-            style={{
-              backgroundColor: "rgb(201, 235, 100)",
-              borderRadius: 15,
-              padding: 15,
-       
-
-              paddingHorizontal: screen.width * 0.1,
-            }}
-            onPress={() => setOpen(true)}
-          >
-            <Text style={{ color: "black" }}>Hedefleri Düzenle</Text>
-          </TouchableOpacity>
-          <Modal
-            open={open}
-            setOpen={setOpen}
-            onUpdate={(newadim, newkalori) => {
-              setData((prev) => ({
-                ...prev,
-                steps: newadim,
-                calories: newkalori,
-              }));
-            }}
-          />
-       <View style={styles.container}>
-          {stats.map((item, index) => (
-            <View key={index} style={styles.card}>
-              <Text style={styles.label}>{item.icon}  {item.label}</Text>
-              <Text style={styles.value}>{item.value || ""}</Text>
-
-            </View>
-          ))}
-        </View>  </ScrollView>
-       
-      </SafeAreaView>
+        ))}
+      </View>
 
       <TouchableOpacity
-        style={{
-          backgroundColor: "rgb(201, 235, 100)",
-          width: 60,
-          height: 60,
-          marginBottom: topPadding,
-          alignSelf: "center",
-          borderRadius: 30,
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          shadowColor: "rgb(155, 181, 76)",
-          shadowOffset: { width: 0, height: 5 },
-          shadowOpacity: 0.3,
-          shadowRadius: 5,
-          elevation: 8,
-        }}
+        style={styles.logoutButton}
         onPress={handleLogout}
+        accessibilityLabel="Çıkış yap"
       >
-        <AntDesign name="logout" size={24} color="black" />
+        <AntDesign name="logout" size={24} color={colors.dark} />
       </TouchableOpacity>
-    </LinearGradient>
+
+      <GoalModal
+        open={open}
+        setOpen={setOpen}
+        uid={user?.uid}
+        initialSteps={profile?.steps}
+        initialCalories={profile?.calories}
+        onUpdate={(steps, calories) => setProfile((prev) => ({ ...prev, steps, calories }))}
+      />
+    </Screen>
   );
 }
 
-const styles = {
-  container: {
-    
+const styles = StyleSheet.create({
+  content: {
+    alignItems: "center",
+  },
+  avatarPlaceholder: {
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  name: {
+    fontSize: 24,
+    color: colors.text,
+    marginVertical: 12,
+    textAlign: "center",
+  },
+  editButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 32,
+    marginTop: 10,
+  },
+  editButtonText: {
+    color: colors.dark,
+  },
+  stats: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    padding:30
+    gap: 10,
+    width: "100%",
+    marginVertical: 24,
   },
   card: {
     flex: 1,
-    backgroundColor: "rgb(49,49,49)",
+    backgroundColor: colors.surface,
     padding: 10,
-    marginHorizontal: 5,
-   fontSize:"bold",
     borderRadius: 15,
-    alignItems: "left",
     shadowColor: "#000",
     shadowOpacity: 0.5,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
-    elevation: 5
+    elevation: 5,
   },
-  label: {
-    color: "white",
-    fontSize: 14,
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 5,
   },
+  label: {
+    color: colors.text,
+    fontSize: 14,
+  },
   value: {
-    color: "rgb(201,235,100)",
+    color: colors.primary,
     fontSize: 16,
     fontWeight: "bold",
   },
-};
+  logoutButton: {
+    backgroundColor: colors.primary,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "rgb(155, 181, 76)",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+});

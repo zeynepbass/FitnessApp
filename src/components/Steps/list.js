@@ -1,46 +1,64 @@
-import { View, Text, ScrollView } from "react-native";
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { StyleSheet, Text, View } from "react-native";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { formatDateKey } from "../../helper/date";
+import { colors } from "../../theme";
 
-const List = ({data}) => {
+const List = ({ data }) => {
+  if (!data.length) {
+    return <Text style={styles.empty}>Henüz veri yok</Text>;
+  }
+
   return (
-    <ScrollView style={{ flex: 1 }}>
-      {data.length > 0 ? (
-        data.map((item) => (
-          <View
-            key={item.id}
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems:"center",
-              backgroundColor: "rgb(49,49,49)",
-              padding: 15,
-              borderRadius: 10,
-              marginBottom: 10,
-              elevation: 2,
-            }}
-          >
-            <View> 
-            <Text style={{ color: "black",backgroundColor:"rgb(201, 235, 100)",padding:5,borderRadius:10,margin:5,fontWeight:"bold",width:"40" }}> <FontAwesome name="calendar" size={24} color="black" /></Text>
-                <Text style={{ color: "white" }}>  {new Date(item.date).toLocaleDateString("tr-TR")}</Text>
-                </View>
-            <View>
-
-            <Text style={{ color: "white" }}>Adım: {item.steps}</Text>
-            <Text style={{ color: "white" }}>Kalori: {item.calories}</Text>
-            <Text style={{ color: "white" }}>Mesafe: {item.distance}</Text>
+    <View>
+      {data.map((item) => (
+        <View key={item.id} style={styles.row}>
+          <View style={styles.dateColumn}>
+            <View style={styles.iconBadge}>
+              <FontAwesome name="calendar" size={20} color={colors.dark} />
             </View>
-  
+            <Text style={styles.text}>{formatDateKey(item.date)}</Text>
           </View>
-        ))
-      ) : (
-        <Text style={{ textAlign: "center", marginTop: 30,color:"white" }}>
-          Henüz veri yok 
-        </Text>
-      )}
-    </ScrollView>
+          <View>
+            <Text style={styles.text}>Adım: {item.steps ?? 0}</Text>
+            <Text style={styles.text}>Kalori: {item.calories ?? 0} kcal</Text>
+            <Text style={styles.text}>Mesafe: {Number(item.distance ?? 0).toFixed(2)} km</Text>
+          </View>
+        </View>
+      ))}
+    </View>
   );
 };
 
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    elevation: 2,
+  },
+  dateColumn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
+  },
+  iconBadge: {
+    backgroundColor: colors.primary,
+    padding: 8,
+    borderRadius: 10,
+  },
+  text: {
+    color: colors.text,
+  },
+  empty: {
+    textAlign: "center",
+    marginTop: 30,
+    color: colors.text,
+  },
+});
+
 export default List;
-
-

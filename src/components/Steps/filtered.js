@@ -1,92 +1,86 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { useState } from "react";
+import { useMemo } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { toDateKey } from "../../helper/date";
+import { colors } from "../../theme";
 
-export default function Filtered({active,setActive,data}) {
+const DAY_COUNT = 7;
 
+const getLastDays = () => {
+  const today = new Date();
+  return Array.from({ length: DAY_COUNT }, (_, index) => {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (DAY_COUNT - 1 - index));
+    return {
+      key: toDateKey(day),
+      dayShort: day.toLocaleDateString("tr-TR", { weekday: "short" }),
+      date: day.getDate(),
+    };
+  });
+};
 
-  const getPreviousAndToday7Days = () => {
-    const days = [];
-    const today = new Date();
-  
-
-    for (let i = 6; i > 0; i--) {
-      const day = new Date();
-      day.setDate(today.getDate() - i);
-  
-      const dayShort = day.toLocaleDateString("en-US", { weekday: "short" });
-      const date = day.getDate();
-  
-      days.push({ id: 6 - i, dayShort, date }); 
-    }
-  
-    return days;
-  };
-
-  const weekDays = getPreviousAndToday7Days();
-
-
+export default function Filtered({ active, onSelect }) {
+  const days = useMemo(getLastDays, []);
 
   return (
     <View style={styles.container}>
-      {weekDays.map((item) => (
-        <TouchableOpacity key={item.id} onPress={() =>     setActive(item.date)}>
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor:
-                  active === item.date ? "rgb(201, 235, 100)" : "rgb(49,49,49)",
-              },
-            ]}
+      {days.map((item) => {
+        const selected = active === item.key;
+        return (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.card, selected && styles.cardActive]}
+            onPress={() => onSelect(selected ? null : item.key)}
           >
-            <Text style={{ color: active === item.date ? "black" : "white" }}>
+            <Text style={[styles.dayText, selected && styles.textActive]} numberOfLines={1}>
               {item.dayShort}
             </Text>
-            <View
-              style={[
-                styles.date,
-                {
-                  backgroundColor:
-                    active === item.date ? "white" : "rgb(99,100,96)",
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontSize: 12,
-
-                  color: active === item.date ? "black" : "white",
-                }}
-              >
-                {item.date}
-              </Text>
+            <View style={[styles.date, selected && styles.dateActive]}>
+              <Text style={[styles.dateText, selected && styles.textActive]}>{item.date}</Text>
             </View>
-          </View>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    gap: 6,
+    marginVertical: 10,
+  },
+  card: {
+    flex: 1,
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    elevation: 3,
+  },
+  cardActive: {
+    backgroundColor: colors.primary,
+  },
+  dayText: {
+    color: colors.text,
+    fontSize: 12,
+  },
   date: {
     justifyContent: "center",
     alignItems: "center",
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.muted,
   },
-  container: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  dateActive: {
+    backgroundColor: colors.text,
   },
-  card: {
-    width: 50,
-    borderRadius: 20,
-    padding: 10,
-    marginRight: 10,
-    elevation: 3,
-    alignItems: "center",
+  dateText: {
+    fontSize: 12,
+    color: colors.text,
+  },
+  textActive: {
+    color: colors.dark,
   },
 });

@@ -1,12 +1,5 @@
-import React from 'react'
+import Register from "../components/Register";
 
-import Register from "../components/Register"
-const RegisterScreen = () => {
-  return (
+const RegisterScreen = () => <Register />;
 
-<Register/>
-
-  )
-}
-
-export default RegisterScreen
+export default RegisterScreen;

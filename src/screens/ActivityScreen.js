@@ -1,12 +1,5 @@
-import React from 'react'
+import Activity from "../components/Activity";
 
-import Activity from "../components/Activity"
-const ActivityScreen = () => {
-  return (
+const ActivityScreen = () => <Activity />;
 
-<Activity/>
-
-  )
-}
-
-export default ActivityScreen
+export default ActivityScreen;

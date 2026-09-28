@@ -1,43 +1,42 @@
-
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TextInput,
-  SafeAreaView,
-  TouchableOpacity,
-  Alert,
-  StyleSheet,
-  ImageBackground,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { auth, db } from "../../firebase"; 
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { useState } from "react";
+import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { createUserWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase";
+import { getAuthErrorMessage } from "../helper/authErrors";
+import AuthLayout, { authStyles } from "./AuthLayout";
+import { colors } from "../theme";
+
+const fields = [
+  { key: "ad", placeholder: "Ad", autoCapitalize: "words" },
+  { key: "soyad", placeholder: "Soyad", autoCapitalize: "words" },
+  { key: "email", placeholder: "Email", keyboardType: "email-address" },
+  { key: "confirmEmail", placeholder: "Email tekrar", keyboardType: "email-address" },
+  { key: "password", placeholder: "Parola", secureTextEntry: true },
+  { key: "confirmPassword", placeholder: "Parola tekrar", secureTextEntry: true },
+];
+
+const initialForm = fields.reduce((form, field) => ({ ...form, [field.key]: "" }), {});
 
 const Register = () => {
   const navigation = useNavigation();
-  const [formData, setFormData] = useState({
-    email: "",
-    confirmEmail: "",
-    password: "",
-    confirmPassword: "",
-    ad: "",
-    soyad: "",
-  });
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleRegister = async () => {
-    await AsyncStorage.clear();
-    const { email, confirmEmail, password, confirmPassword, ad, soyad } = formData;
+    const ad = formData.ad.trim();
+    const soyad = formData.soyad.trim();
+    const email = formData.email.trim();
+    const confirmEmail = formData.confirmEmail.trim();
+    const { password, confirmPassword } = formData;
 
-    if (!email || !confirmEmail || !password || !confirmPassword || !ad || !soyad) {
+    if (!ad || !soyad || !email || !confirmEmail || !password || !confirmPassword) {
       Alert.alert("Hata", "Lütfen tüm alanları doldurun!");
       return;
     }
 
-    if (email !== confirmEmail) {
+    if (email.toLowerCase() !== confirmEmail.toLowerCase()) {
       Alert.alert("Hata", "Email adresleri eşleşmiyor!");
       return;
     }
@@ -47,155 +46,59 @@ const Register = () => {
       return;
     }
 
+    setSubmitting(true);
     try {
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      const displayName = `${ad} ${soyad}`;
 
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-
-      await updateProfile(user, {
-        displayName: ad + " " + soyad,
-      });
-
-
+      await updateProfile(user, { displayName });
       await setDoc(doc(db, "users", user.uid), {
         ad,
         soyad,
-        displayName: ad + " " + soyad,
-        email,
+        displayName,
+        email: user.email,
         createdAt: Date.now(),
       });
+      await signOut(auth);
 
       Alert.alert("Başarılı", "Kayıt tamamlandı!");
       navigation.navigate("Login");
-
     } catch (error) {
-      console.log(error.message);
-      Alert.alert("Hata", error.message);
+      Alert.alert("Hata", getAuthErrorMessage(error, "Kayıt işlemi başarısız oldu."));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <ImageBackground
-      source={require("../../assets/background.jpg")}
-      style={{ flex: 1 }}
-    >
-      <LinearGradient colors={["rgba(41,47,25,0.7)", "rgba(0,0,0,0.7)"]} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
-          <View style={styles.formContainer}>
-            <ScrollView
-              contentContainerStyle={{ paddingVertical: 20 }}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              <Text style={styles.headerText}>Kayıt Ol</Text>
-              <TextInput
-                value={formData.ad}
-                placeholder="Ad"
-                style={styles.input}
-                placeholderTextColor="white"
-                onChangeText={(text) => setFormData({ ...formData, ad: text })}
-              />
-              <TextInput
-                value={formData.soyad}
-                placeholder="Soyad"
-                style={styles.input}
-                placeholderTextColor="white"
-                onChangeText={(text) => setFormData({ ...formData, soyad: text })}
-              />
-              <TextInput
-                value={formData.email}
-                placeholder="Email"
-                style={styles.input}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholderTextColor="white"
-                onChangeText={(text) => setFormData({ ...formData, email: text })}
-              />
-              <TextInput
-                value={formData.confirmEmail}
-                placeholder="Email tekrar"
-                style={styles.input}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholderTextColor="white"
-                onChangeText={(text) => setFormData({ ...formData, confirmEmail: text })}
-              />
-              <TextInput
-                value={formData.password}
-                placeholder="Parola"
-                style={styles.input}
-                autoCapitalize="none"
-                placeholderTextColor="white"
-                secureTextEntry
-                onChangeText={(text) => setFormData({ ...formData, password: text })}
-              />
-              <TextInput
-                value={formData.confirmPassword}
-                placeholder="Parola tekrar"
-                style={styles.input}
-                autoCapitalize="none"
-                placeholderTextColor="white"
-                secureTextEntry
-                onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
-              />
-                     <TouchableOpacity  onPress={()=>navigation.navigate("Login")}>
-              <Text
-                style={{ color: "rgb(201, 235, 100)", textDecorationLine: "underline", textAlign: "left" }}
-
-              >
-                Giriş Yap
-              </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.button} onPress={handleRegister}>
-                <Text style={styles.buttonText}>Kayıt Ol</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
-    </ImageBackground>
+    <AuthLayout title="Kayıt Ol">
+      {fields.map(({ key, ...inputProps }) => (
+        <TextInput
+          key={key}
+          value={formData[key]}
+          style={authStyles.input}
+          autoCapitalize="none"
+          placeholderTextColor={colors.light}
+          onChangeText={(value) => setFormData((prev) => ({ ...prev, [key]: value }))}
+          {...inputProps}
+        />
+      ))}
+      <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+        <Text style={authStyles.link}>Giriş Yap</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[authStyles.button, submitting && authStyles.buttonDisabled]}
+        onPress={handleRegister}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color={colors.dark} />
+        ) : (
+          <Text style={authStyles.buttonText}>Kayıt Ol</Text>
+        )}
+      </TouchableOpacity>
+    </AuthLayout>
   );
 };
-
-const styles = StyleSheet.create({
-  formContainer: {
-    width: "90%",
-    backgroundColor: "rgb(26, 38, 19)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
-    borderRadius: 20,
-    padding: 20,
-  },
-  headerText: {
-    paddingVertical: 20,
-    textAlign: "center",
-    color: "white",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  input: {
-    backgroundColor: "rgb(51, 51, 51)",
-    padding: 10,
-    marginVertical: 8,
-    borderRadius: 8,
-  },
-  button: {
-    backgroundColor: "rgb(201, 235, 100)",
-    borderRadius: 15,
-    padding: 15,
-    marginTop: 20,
-    alignItems: "center",
-    width: "50%",
-    alignSelf: "center",
-  },
-  buttonText: {
-    color: "black",
-    fontSize: 16,
-  },
-});
 
 export default Register;

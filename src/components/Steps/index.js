@@ -1,178 +1,142 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Pedometer } from "expo-sensors";
 import * as Notifications from "expo-notifications";
-import { doc, collection, setDoc } from "firebase/firestore";
-import { db } from "../../../firebase";
+import { saveDailySteps } from "../../helper/http";
+import { toDateKey } from "../../helper/date";
+import { colors } from "../../theme";
 
-const getTodayDate = () => new Date().toISOString().split("T")[0];
+const KM_PER_STEP = 0.0008;
+const KCAL_PER_STEP = 0.05;
+const INACTIVITY_LIMIT_MS = 60 * 60 * 1000;
+const INACTIVITY_CHECK_MS = 60 * 1000;
 
-const saveDailySteps = async (email, steps, calories, distance, date) => {
-  try {
-    const userDocRef = doc(db, "users", email);
-    const dailyStepsDocRef = doc(collection(userDocRef, "dailySteps"), date);
-    await setDoc(dailyStepsDocRef, { steps, calories, distance, date });
-    console.log(`Günlük adımlar ${date} için Firebase'e kaydedildi.`);
-  } catch (error) {
-    console.error("Firestore kayıt hatası:", error);
-  }
-};
+const toStats = (steps) => ({
+  steps,
+  calories: Math.round(steps * KCAL_PER_STEP),
+  distance: steps * KM_PER_STEP,
+});
 
 export default function StepCounter({ userEmail }) {
   const [steps, setSteps] = useState(0);
-  const [calories, setCalories] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [today, setToday] = useState(getTodayDate());
+  const [today, setToday] = useState(() => toDateKey());
+  const [loaded, setLoaded] = useState(false);
 
   const stepsRef = useRef(0);
+  const lastPedometerValueRef = useRef(0);
   const lastStepTimeRef = useRef(Date.now());
   const hasNotifiedRef = useRef(false);
-  const lastPedometerValue = useRef(null); 
 
-  const stepDataKey = `stepData_${userEmail}`;
-
-  useEffect(() => {
-    const init = async () => {
-      if (!userEmail) return;
-
-      try {
-        const storedDataRaw = await AsyncStorage.getItem(stepDataKey);
-        const storedData = storedDataRaw ? JSON.parse(storedDataRaw) : null;
-        const currentDate = getTodayDate();
-
-        if (storedData && storedData.date === currentDate) {
-          setSteps(storedData.steps);
-          setCalories(storedData.calories);
-          setDistance(storedData.distance);
-          stepsRef.current = storedData.steps;
-          setToday(currentDate);
-        } else if (storedData && storedData.date !== currentDate) {
-          await saveDailySteps(userEmail, storedData.steps, storedData.calories, storedData.distance, storedData.date);
-          await AsyncStorage.setItem(stepDataKey, JSON.stringify({ steps: 0, calories: 0, distance: 0, date: currentDate }));
-          setSteps(0);
-          setCalories(0);
-          setDistance(0);
-          stepsRef.current = 0;
-          setToday(currentDate);
-        } else {
-          await AsyncStorage.setItem(stepDataKey, JSON.stringify({ steps: 0, calories: 0, distance: 0, date: currentDate }));
-        }
-      } catch (e) {
-        console.error("Veri yüklenirken hata:", e);
-      }
-    };
-
-    init();
-  }, [userEmail]);
+  const storageKey = `stepData_${userEmail}`;
 
   useEffect(() => {
     if (!userEmail) return;
+    let cancelled = false;
+    setLoaded(false);
 
-    const saveLocalData = async () => {
+    const load = async () => {
+      const currentDate = toDateKey();
+      let initialSteps = 0;
+
       try {
-        await AsyncStorage.setItem(stepDataKey, JSON.stringify({
-          steps,
-          calories,
-          distance,
-          date: today,
-        }));
-      } catch (e) {
-        console.error("Veri kaydedilemedi:", e);
+        const raw = await AsyncStorage.getItem(storageKey);
+        const stored = raw ? JSON.parse(raw) : null;
+
+        if (stored?.date === currentDate) {
+          initialSteps = stored.steps ?? 0;
+        } else if (stored?.date) {
+          saveDailySteps(userEmail, { ...toStats(stored.steps ?? 0), date: stored.date }).catch(
+            () => {}
+          );
+        }
+      } catch {
+        initialSteps = 0;
       }
+
+      if (cancelled) return;
+      stepsRef.current = initialSteps;
+      setSteps(initialSteps);
+      setToday(currentDate);
+      setLoaded(true);
     };
 
-    saveLocalData();
-  }, [steps, calories, distance, today, userEmail]);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userEmail, storageKey]);
 
   useEffect(() => {
-    let subscription;
-
-    const startPedometer = async () => {
-      const isAvailable = await Pedometer.isAvailableAsync();
-      if (!isAvailable) return;
-
-      subscription = Pedometer.watchStepCount((result) => {
-        const currentPedometerSteps = result.steps;
-
-        if (lastPedometerValue.current === null) {
-          console.log("📥 İlk adım verisi alındı:", currentPedometerSteps);
-          lastPedometerValue.current = currentPedometerSteps;
-          return;
-        }
-
-        const stepDiff = currentPedometerSteps - lastPedometerValue.current;
-
-        if (stepDiff > 0) {
-          stepsRef.current += stepDiff;
-          const dist = stepsRef.current * 0.0008;
-          const cal = Math.round(stepsRef.current * 0.05);
-
-          setSteps(stepsRef.current);
-          setDistance(dist);
-          setCalories(cal);
-        }
-
-        lastPedometerValue.current = currentPedometerSteps;
-        lastStepTimeRef.current = Date.now();
-        hasNotifiedRef.current = false;
-      });
-    };
-
-    if (userEmail) startPedometer();
-
-    const now = new Date();
-    const midnight = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1,
-      0, 0, 0, 0
+    if (!loaded || !userEmail) return;
+    AsyncStorage.setItem(storageKey, JSON.stringify({ ...toStats(steps), date: today })).catch(
+      () => {}
     );
-    const msToMidnight = midnight.getTime() - now.getTime();
+  }, [loaded, userEmail, storageKey, steps, today]);
 
-    const midnightTimeout = setTimeout(async () => {
-      try {
-        await saveDailySteps(userEmail, stepsRef.current, calories, distance, today);
-      } catch (e) {
-        console.error("Gece yarısı Firebase kaydı başarısız:", e);
-      }
+  useEffect(() => {
+    if (!loaded || !userEmail) return;
+    let subscription;
+    let active = true;
 
-      setSteps(0);
-      setCalories(0);
-      setDistance(0);
-      stepsRef.current = 0;
-      lastPedometerValue.current = null;
-      const newDate = getTodayDate();
-      setToday(newDate);
+    Pedometer.isAvailableAsync()
+      .then((available) => {
+        if (!available || !active) return;
+        lastPedometerValueRef.current = 0;
+        subscription = Pedometer.watchStepCount(({ steps: total }) => {
+          const diff = total - lastPedometerValueRef.current;
+          lastPedometerValueRef.current = total;
+          if (diff <= 0) return;
 
-      await AsyncStorage.setItem(stepDataKey, JSON.stringify({
-        steps: 0, calories: 0, distance: 0, date: newDate
-      }));
-    }, msToMidnight);
-
-    const inactivityInterval = setInterval(async () => {
-      const now = Date.now();
-      const timeSinceLastStep = now - lastStepTimeRef.current;
-
-      if (timeSinceLastStep >= 3600000 && !hasNotifiedRef.current) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Hareketsiz kaldın!",
-            body: `Son adım sayın: ${stepsRef.current} 🚶‍♂️`,
-          },
-          trigger: null,
+          stepsRef.current += diff;
+          setSteps(stepsRef.current);
+          lastStepTimeRef.current = Date.now();
+          hasNotifiedRef.current = false;
         });
-        hasNotifiedRef.current = true;
-      }
-    }, 60000);
+      })
+      .catch(() => {});
 
     return () => {
+      active = false;
       subscription?.remove();
-      clearTimeout(midnightTimeout);
-      clearInterval(inactivityInterval);
     };
-  }, [today, userEmail, calories, distance]);
+  }, [loaded, userEmail]);
 
+  useEffect(() => {
+    if (!loaded || !userEmail) return;
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    const timeout = setTimeout(() => {
+      saveDailySteps(userEmail, { ...toStats(stepsRef.current), date: today }).catch(() => {});
+      stepsRef.current = 0;
+      setSteps(0);
+      setToday(toDateKey(nextMidnight));
+    }, nextMidnight.getTime() - now.getTime());
+
+    return () => clearTimeout(timeout);
+  }, [loaded, userEmail, today]);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    const interval = setInterval(() => {
+      if (hasNotifiedRef.current) return;
+      if (Date.now() - lastStepTimeRef.current < INACTIVITY_LIMIT_MS) return;
+
+      hasNotifiedRef.current = true;
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Hareketsiz kaldın!",
+          body: `Son adım sayın: ${stepsRef.current} 🚶‍♂️`,
+        },
+        trigger: null,
+      }).catch(() => {});
+    }, INACTIVITY_CHECK_MS);
+
+    return () => clearInterval(interval);
+  }, [userEmail]);
+
+  const { calories, distance } = toStats(steps);
   const stats = [
     { label: "Adım", value: steps, unit: "adım" },
     { label: "Kalori", value: calories, unit: "kcal" },
@@ -181,12 +145,13 @@ export default function StepCounter({ userEmail }) {
 
   return (
     <View style={styles.container}>
-      {stats.map((item, i) => (
-        <View key={i} style={styles.card}>
+      {stats.map((item) => (
+        <View key={item.label} style={styles.card}>
           <Text style={styles.label}>{item.label}</Text>
-          <Text style={styles.value}>
-            {item.value} {item.unit}
+          <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+            {item.value}
           </Text>
+          <Text style={styles.unit}>{item.unit}</Text>
         </View>
       ))}
     </View>
@@ -194,16 +159,29 @@ export default function StepCounter({ userEmail }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flexDirection: "row", marginVertical: 20 },
+  container: {
+    flexDirection: "row",
+    gap: 10,
+    marginVertical: 20,
+  },
   card: {
-    width: 150,
-    backgroundColor: "rgb(49,49,49)",
+    flex: 1,
+    backgroundColor: colors.surface,
     borderRadius: 15,
     padding: 15,
-    marginRight: 10,
     elevation: 3,
-    alignItems: "flex-start",
   },
-  label: { color: "white" },
-  value: { fontSize: 22, fontWeight: "bold", color: "white" },
+  label: {
+    color: colors.text,
+  },
+  value: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: colors.text,
+    marginTop: 4,
+  },
+  unit: {
+    color: colors.primary,
+    fontSize: 12,
+  },
 });

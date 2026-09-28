@@ -1,12 +1,5 @@
-import React from 'react'
+import Details from "../components/Details";
 
-import Details from "../components/Details"
-const DetailsScreen = () => {
-  return (
+const DetailsScreen = () => <Details />;
 
-<Details/>
-
-  )
-}
-
-export default DetailsScreen
+export default DetailsScreen;

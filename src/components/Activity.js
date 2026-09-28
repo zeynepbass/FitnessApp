@@ -1,177 +1,215 @@
-import { View, Text, Modal, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo, useState } from "react";
 import {
-  View,
-  Dimensions,
-  Text,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
   Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { PieChart } from "react-native-chart-kit";
-import { LinearGradient } from "expo-linear-gradient";
-import { getStepsAndCalories } from "../helper/http";
-import StepsLimit from "./StepsLimit/index";
+import Screen from "./Screen";
+import StepsLimit from "./StepsLimit";
+import { getDailySteps, getUserProfile } from "../helper/http";
+import { getStoredUser } from "../helper/session";
+import { formatDateKey } from "../helper/date";
+import { CONTENT_MAX_WIDTH, colors } from "../theme";
 
-const screenWidth = Dimensions.get("window").width;
+const CHART_DAYS = 7;
 
-export default function ActivityPieChart() {
+const sliceColors = [
+  "rgb(201,235,100)",
+  "rgb(156,193,43)",
+  "rgb(255,159,67)",
+  "rgb(90,90,90)",
+  "rgb(52,172,224)",
+  "rgb(255,105,180)",
+  "rgb(155,89,182)",
+];
+
+const chartConfig = {
+  color: (opacity = 1) => `rgba(255,255,255,${opacity})`,
+  labelColor: () => colors.text,
+};
+
+export default function Activity() {
+  const { width } = useWindowDimensions();
   const [data, setData] = useState([]);
+  const [goals, setGoals] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await getStepsAndCalories();
-        if (res) setData(res);
-      } catch (error) {
-        console.log("Veri çekme hatası:", error);
-      }
-    };
-    fetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-  const colors = [
-    "rgb(201,235,100)",
-    "rgb(156,193,43)",
-    "rgb(255,159,67)",
-    "rgb(90,90,90)",
-    "rgb(52,172,224)",
-    "rgb(255,105,180)",
-  ];
+      const load = async () => {
+        const user = await getStoredUser();
+        const [steps, profile] = await Promise.all([
+          getDailySteps(user?.email),
+          getUserProfile(user?.uid),
+        ]);
+        if (cancelled) return;
+        setData(steps);
+        setGoals(profile);
+      };
 
-  const chartConfig = {
-    backgroundGradientFrom: "#1e1e1e",
-    backgroundGradientTo: "#1e1e1e",
-    color: (opacity = 1) => `rgba(255,255,255,${opacity})`,
-    labelColor: () => "white",
-  };
+      load().catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
+  const pieData = useMemo(
+    () =>
+      [...data]
+        .filter((item) => item.steps > 0)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-CHART_DAYS)
+        .map((item, index) => ({
+          name: formatDateKey(item.date, { day: "numeric", month: "short" }),
+          population: item.steps,
+          calories: item.calories,
+          color: sliceColors[index % sliceColors.length],
+          legendFontColor: colors.text,
+          legendFontSize: 12,
+        })),
+    [data]
+  );
 
-  const pieData = data.map((item, index) => ({
-    name: item.date,
-    population: item.steps > 0 ? item.steps : 1,
-    color: colors[index % colors.length],
-    legendFontColor: "#fff",
-    legendFontSize: 12,
-  }));
+  const chartSize = Math.min(width, CONTENT_MAX_WIDTH) - 40;
 
   return (
-    <LinearGradient colors={["rgb(41,47,25)", "black"]} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingBottom: 40,
-          }}
-        >
-          <StepsLimit />
+    <Screen>
+      <StepsLimit steps={goals?.steps} calories={goals?.calories} />
 
-          <Text
-            style={{
-              color: "white",
-              fontSize: 20,
-              fontWeight: "bold",
-              marginBottom: 15,
-              marginTop: 10,
-            }}
-          >
-            Günlük Adım Dağılımı
-          </Text>
+      <Text style={styles.title}>Günlük Adım Dağılımı</Text>
 
-          <View style={{ alignItems: "center" }}>
-            <PieChart
-              data={pieData}
-              width={screenWidth - 40}
-              height={250}
-              chartConfig={chartConfig}
-              accessor="population"
-              backgroundColor="transparent"
-              paddingLeft="15"
-              absolute
-              hasLegend={true}
-            />
+      {pieData.length ? (
+        <View style={styles.chartWrapper}>
+          <PieChart
+            data={pieData}
+            width={chartSize}
+            height={Math.min(chartSize, 260)}
+            chartConfig={chartConfig}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft={String(chartSize / 4)}
+            hasLegend={false}
+          />
 
-    
-            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 15, justifyContent: "center" }}>
-              {pieData.map((item, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => setSelectedItem(item)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    margin: 6,
-                    backgroundColor: "rgba(4, 4, 4, 0.09)",
-                    borderRadius: 10,
-                    padding: 6,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: item.color,
-                      marginRight: 6,
-                    }}
-                  />
-                  <Text style={{ color: "white", fontSize: 14 }}>{item.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-
-          <Modal
-            transparent
-            visible={!!selectedItem}
-            animationType="fade"
-            onRequestClose={() => setSelectedItem(null)}
-          >
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: "rgba(0,0,0,0.9)",
-              }}
-            >
-              <View
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  padding: 20,
-                  borderRadius: 16,
-                  width: "75%",
-                  alignItems: "center",
-                }}
+          <View style={styles.legend}>
+            {pieData.map((item) => (
+              <TouchableOpacity
+                key={item.name}
+                onPress={() => setSelectedItem(item)}
+                style={styles.legendItem}
               >
-                <Text style={{ color: "white", fontSize: 18, marginBottom: 8 }}>
-                  {selectedItem?.name}
-                </Text>
-                <Text style={{ color: "rgb(201,235,100)", fontSize: 16 }}>
-                  {selectedItem?.population} adım
-                </Text>
+                <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                <Text style={styles.legendText}>{item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.empty}>Henüz adım verisi yok</Text>
+      )}
 
-                <TouchableOpacity
-                  onPress={() => setSelectedItem(null)}
-                  style={{
-                    marginTop: 15,
-                    backgroundColor: "rgb(201,235,100)",
-                    borderRadius: 10,
-                    paddingVertical: 6,
-                    paddingHorizontal: 20,
-                  }}
-                >
-                  <Text style={{ fontWeight: "bold" }}>Kapat</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-        </ScrollView>
-      </SafeAreaView>
-    </LinearGradient>
+      <Modal
+        transparent
+        visible={!!selectedItem}
+        animationType="fade"
+        onRequestClose={() => setSelectedItem(null)}
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{selectedItem?.name}</Text>
+            <Text style={styles.modalValue}>{selectedItem?.population} adım</Text>
+            <Text style={styles.modalValue}>{selectedItem?.calories ?? 0} kcal</Text>
+
+            <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.closeButton}>
+              <Text style={styles.closeText}>Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  title: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 15,
+    marginTop: 10,
+  },
+  chartWrapper: {
+    alignItems: "center",
+  },
+  legend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginTop: 15,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 6,
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+  },
+  legendDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  legendText: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  empty: {
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: 20,
+  },
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "rgba(0,0,0,0.9)",
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 18,
+    marginBottom: 8,
+  },
+  modalValue: {
+    color: colors.primary,
+    fontSize: 16,
+  },
+  closeButton: {
+    marginTop: 15,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+  },
+  closeText: {
+    fontWeight: "bold",
+  },
+});

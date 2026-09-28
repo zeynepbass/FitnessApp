@@ -1,9 +1,5 @@
-import React from 'react'
-import Natifications from "../components/Notifications/index"
-const NotificationsScreen = () => {
-  return (
-    <Natifications/>
-  )
-}
+import Notifications from "../components/Notifications";
 
-export default NotificationsScreen
+const NotificationsScreen = () => <Notifications />;
+
+export default NotificationsScreen;

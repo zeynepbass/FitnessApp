@@ -5,28 +5,21 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "infoPlist": {
-        "NSHealthShareUsageDescription": "Kullanıcının adım verilerini almak için izin gerekiyor",
-        "NSHealthUpdateUsageDescription": "Kullanıcının adım verilerini güncellemek için izin gerekiyor"
-      },
       "supportsTablet": true
     },
     "android": {
-      "permissions": [
-        "ACTIVITY_RECOGNITION",
-        "NOTIFICATIONS"
-      ],
+      "permissions": ["android.permission.ACTIVITY_RECOGNITION"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true
     },
@@ -34,9 +27,21 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
-          "color": "#ffffff",
-          "sounds": ["default"]
+          "color": "#C9EB64"
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Adımlarını sayabilmek için hareket verilerine erişim gerekiyor."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Profil fotoğrafı seçebilmek için galerine erişim gerekiyor.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
